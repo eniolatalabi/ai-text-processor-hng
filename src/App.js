@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import InputArea from './components/InputArea/InputArea';
 import DarkModeToggle from './components/DarkModeToggle/DarkModeToggle';
 import ActionButtons from './components/ActionButtons/ActionButtons';
-import LanguageSelector from './components/LanguageSelector/LanguageSelector';
 import './App.css';
 
 const App = () => {
@@ -16,8 +15,11 @@ const App = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentUtterance, setCurrentUtterance] = useState(null);
   const [detectedLanguage, setDetectedLanguage] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const chatWindowRef = useRef(null);
+  const maxInputChars = 5000;
 
-  // Language mapping for display
+  // Reduced language mapping - only the required languages
   const languageNames = {
     'en': 'English',
     'es': 'Spanish',
@@ -25,8 +27,15 @@ const App = () => {
     'fr': 'French',
     'ru': 'Russian',
     'tr': 'Turkish',
-    'auto': 'Auto-detected'
+    'auto': 'Auto-detect'
   };
+
+  // Auto-scroll to bottom when messages update
+  useEffect(() => {
+    if (chatWindowRef.current) {
+      chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   // Check API support on component mount with verification
   useEffect(() => {
@@ -85,6 +94,65 @@ const App = () => {
     setIsDarkMode(!isDarkMode);
   };
 
+  // Detect language using the native browser language detection API
+  const detectLanguage = async (text) => {
+    if (!text || text.length < 10) return null;
+    
+    // Try using the Translator API for detection
+    if (supportedAPIs.includes('Translator') && window.ai.translator) {
+      try {
+        const detector = await window.ai.translator.create({
+          model: 'default',
+          sourceLanguage: 'auto',
+          targetLanguage: 'en'
+        });
+        
+        if (detector.detectLanguage) {
+          const detected = await detector.detectLanguage(text);
+          if (detected && detected.language) {
+            return detected.language;
+          }
+        }
+      } catch (e) {
+        console.warn('Language detection API error:', e);
+      }
+    }
+
+    // Basic heuristic detection as fallback
+    // This is very simplistic and just for demonstration
+    const patterns = {
+      es: /[áéíóúüñ¿¡]/i,
+      fr: /[àâçéèêëîïôùûüÿœ]/i,
+      pt: /[ãõáéíóúâêôç]/i,
+      ru: /[а-яА-Я]/i,
+      tr: /[çğıöşü]/i,
+    };
+
+    for (const [lang, pattern] of Object.entries(patterns)) {
+      if (pattern.test(text)) {
+        return lang;
+      }
+    }
+
+    // Default to English if no pattern matches
+    return 'en';
+  };
+
+  const formatTimestamp = () => {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  // Format summary by replacing markdown stars with proper paragraphs
+  const formatSummary = (text) => {
+    if (!text) return '';
+    
+    // Replace markdown bullet points with proper newlines
+    return text.replace(/\*\s+(.+?)(?=\n\*|\n\n|$)/g, '\n• $1')
+              .replace(/\*\*(.+?)\*\*/g, '$1')  // Remove bold markers
+              .trim();
+  };
+
   const handleSend = async () => {
     if (!inputText.trim()) {
       setError('Please enter some text.');
@@ -92,17 +160,36 @@ const App = () => {
     }
     setError('');
 
-    const newMessage = { text: inputText, type: 'user' };
+    // Detect language
+    const langDetected = await detectLanguage(inputText);
+    
+    const timestamp = formatTimestamp();
+    const newMessage = { 
+      text: inputText, 
+      type: 'user',
+      timestamp,
+      language: langDetected
+    };
+    
     setMessages([...messages, newMessage]);
     setInputText('');
     
-    // Don't reset detected language here
-    // Language detection happens during translation
+    // Store the detected language
+    if (langDetected) {
+      setDetectedLanguage(langDetected);
+    }
   };
 
   const handleSummarize = async () => {
     if (!messages.length) {
       setError('No text available to summarize.');
+      return;
+    }
+    
+    const lastMessage = messages[messages.length - 1].text;
+    
+    if (lastMessage.length < 150) {
+      setError('Input must be at least 150 characters for summarization.');
       return;
     }
     
@@ -126,14 +213,19 @@ const App = () => {
 
       console.log('Summarizer API created:', summarizer);
 
-      const lastMessage = messages[messages.length - 1].text;
       const result = await summarizer.summarize(lastMessage);
       console.log('Summarization Result:', result);
 
       if (result && typeof result === 'string') {
+        const formattedSummary = formatSummary(result);
+        
         setMessages((prevMessages) => [
           ...prevMessages,
-          { text: `Summary:\n${result}`, type: 'system' },
+          { 
+            text: `Summary:\n${formattedSummary}`, 
+            type: 'system',
+            timestamp: formatTimestamp() 
+          },
         ]);
       } else {
         setError('Failed to summarize text.');
@@ -146,7 +238,7 @@ const App = () => {
     setIsLoading(false);
   };
 
-  const handleTranslate = async () => {
+  const handleTranslate = async (targetLanguage) => {
     if (!messages.length) {
       setError('No text available to translate.');
       return;
@@ -156,6 +248,9 @@ const App = () => {
       setError('Translator API not available. Please enable Chrome AI features.');
       return;
     }
+    
+    // Set the selected language from the dropdown
+    setSelectedLanguage(targetLanguage);
     
     setIsLoading(true);
     setError('');
@@ -183,16 +278,18 @@ const App = () => {
         }
       } catch (detectErr) {
         console.warn('Detection error:', detectErr);
+        // Try our custom detection as fallback
+        detectedLang = await detectLanguage(lastMessage) || '';
       }
       
       // Step 2: Now translate with explicit source/target
       const translator = await window.ai.translator.create({
         model: 'default',
         sourceLanguage: detectedLang || 'auto', // Use detected language or auto
-        targetLanguage: selectedLanguage
+        targetLanguage: targetLanguage
       });
       
-      console.log(`Translating from ${detectedLang || 'auto'} to ${selectedLanguage}`);
+      console.log(`Translating from ${detectedLang || 'auto'} to ${targetLanguage}`);
       const result = await translator.translate(lastMessage);
       console.log('Translation Result:', result);
 
@@ -204,13 +301,15 @@ const App = () => {
 
       if (typeof result === 'string' && result.trim() !== '') {
         const detectedInfo = detectedLang ? 
-          `Detected: ${languageNames[detectedLang] || detectedLang} → ` : '';
+          `${languageNames[detectedLang] || detectedLang} → ` : '';
           
         setMessages((prevMessages) => [
           ...prevMessages,
           { 
-            text: `${detectedInfo}Translated to ${languageNames[selectedLanguage]}: ${result}`, 
-            type: 'system' 
+            text: `${detectedInfo}${languageNames[targetLanguage]}: ${result}`, 
+            type: 'system',
+            timestamp: formatTimestamp(),
+            language: targetLanguage
           },
         ]);
         setError(''); // Clear error if translation succeeds
@@ -227,7 +326,7 @@ const App = () => {
 
         // Attempt to detect content language through a different approach
         let sourceLanguage = 'auto';
-        if (selectedLanguage === 'en') {
+        if (targetLanguage === 'en') {
           // If target is English, try to detect non-English source
           for (const lang of Object.keys(languageNames)) {
             if (lang !== 'en' && lang !== 'auto') {
@@ -258,11 +357,11 @@ const App = () => {
           setDetectedLanguage('en');
         }
 
-        console.log(`Fallback translation from ${sourceLanguage} to ${selectedLanguage}`);
+        console.log(`Fallback translation from ${sourceLanguage} to ${targetLanguage}`);
         const fallbackOpts = {
           model: 'default',
           sourceLanguage: sourceLanguage,
-          targetLanguage: selectedLanguage,
+          targetLanguage: targetLanguage,
         };
 
         const translator = await window.ai.translator.create(fallbackOpts);
@@ -273,8 +372,10 @@ const App = () => {
           setMessages((prevMessages) => [
             ...prevMessages,
             { 
-              text: `${languageNames[sourceLanguage] || sourceLanguage} → Translated to ${languageNames[selectedLanguage]}: ${result}`, 
-              type: 'system' 
+              text: `${languageNames[sourceLanguage] || sourceLanguage} → ${languageNames[targetLanguage]}: ${result}`, 
+              type: 'system',
+              timestamp: formatTimestamp(),
+              language: targetLanguage
             },
           ]);
           setError(''); // Clear error if fallback succeeds
@@ -289,15 +390,18 @@ const App = () => {
     setIsLoading(false);
   };
 
-  const handleTextToSpeech = (text) => {
+  const handleTextToSpeech = (text, language) => {
     // First cancel any ongoing speech
     window.speechSynthesis.cancel();
     
     const synth = window.speechSynthesis;
     const utterance = new SpeechSynthesisUtterance(text);
 
-    // Set language for speech if detected
-    if (detectedLanguage && detectedLanguage !== 'auto') {
+    // Set language for speech if available
+    if (language && language !== 'auto') {
+      utterance.lang = language;
+      console.log(`Setting speech language to: ${language}`);
+    } else if (detectedLanguage && detectedLanguage !== 'auto') {
       utterance.lang = detectedLanguage;
       console.log(`Setting speech language to: ${detectedLanguage}`);
     }
@@ -322,53 +426,186 @@ const App = () => {
     setCurrentUtterance(null);
   };
 
+  // Speech to text functionality
+  const startSpeechToText = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      setError('Speech recognition is not supported in your browser.');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
+    // Try to set language based on selected or detected language
+    if (selectedLanguage && selectedLanguage !== 'auto') {
+      recognition.lang = selectedLanguage;
+    } else if (detectedLanguage && detectedLanguage !== 'auto') {
+      recognition.lang = detectedLanguage;
+    }
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError(''); // Clear any errors
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setInputText(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setError(`Speech recognition error: ${event.error}`);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+    window.currentRecognition = recognition; // Save reference to stop later
+  };
+
+  const stopSpeechToText = () => {
+    if (window.currentRecognition) {
+      window.currentRecognition.stop();
+      window.currentRecognition = null;
+    }
+    setIsListening(false);
+  };
+
+  const toggleSpeechToText = () => {
+    if (isListening) {
+      stopSpeechToText();
+    } else {
+      startSpeechToText();
+    }
+  };
+
   return (
     <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
-      <DarkModeToggle isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+      <header className="app-header">
+        <h1 className="app-title">Smart Language Assistant</h1>
+        <DarkModeToggle isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+      </header>
       
       {/* API Status Banner */}
       {supportedAPIs.length === 0 && (
         <div className="api-status-warning">
-          <p>⚠️ Chrome AI APIs not detected. Please enable AI features in Chrome settings.</p>
+          <p>⚠️ AI APIs not detected. Please enable AI features in your browser settings.</p>
         </div>
       )}
       
       <div className="chat-container">
-        <div className="chat-window">
-          {messages.map((msg, index) => (
-            <div key={index} className={`message ${msg.type}`}>
-              <p>{msg.text}</p>
-              <div className="tts-controls">
-                <button
-                  onClick={() => handleTextToSpeech(msg.text)}
-                  aria-label="Play"
-                  disabled={!('speechSynthesis' in window)}
-                >
-                  🔊
-                </button>
-                {isSpeaking && (
-                  <button onClick={handleStop} aria-label="Stop">
-                    ⏹️
+        <div className="chat-window" ref={chatWindowRef}>
+          {messages.length === 0 && (
+            <div className="welcome-message">
+              <h2>Welcome to Smart Language Assistant</h2>
+              <p>This app helps you with language-related tasks:</p>
+              <ul>
+                <li>Translate text between multiple languages</li>
+                <li>Summarize long content into key points</li>
+                <li>Listen to text being read aloud</li>
+                <li>Convert your speech to text</li>
+              </ul>
+              <p>Get started by typing or speaking your message below!</p>
+            </div>
+          )}
+          
+          {messages.map((message, index) => (
+            <div key={index} className={`message-container ${message.type}`}>
+              <div className="message-header">
+                <div className="message-type">
+                  {message.type === 'user' ? 'You' : 'Assistant'}
+                </div>
+                {message.language && (
+                  <div className="message-language">
+                    {languageNames[message.language] || message.language}
+                  </div>
+                )}
+                <div className="message-timestamp">{message.timestamp}</div>
+              </div>
+              <div className="message-content">{message.text}</div>
+              <div className="message-actions">
+                {message.text && (
+                  <button
+                    className="action-button"
+                    onClick={() => handleTextToSpeech(message.text, message.language)}
+                    disabled={isSpeaking}
+                  >
+                    <span>🔊 Listen</span>
+                  </button>
+                )}
+                {isSpeaking && currentUtterance && (
+                  <button className="action-button" onClick={handleStop}>
+                    <span>⏹️ Stop</span>
                   </button>
                 )}
               </div>
             </div>
           ))}
-          {isLoading && <div className="loading-spinner">Loading...</div>}
-          {error && <div className="error-toast">{error}</div>}
-          {detectedLanguage && (
-            <div className="language-info">
-              <p>Detected Language: {languageNames[detectedLanguage] || detectedLanguage}</p>
+          
+          {isLoading && (
+            <div className="loading-container">
+              <div className="loading-spinner"></div>
+              <p>Processing your request...</p>
             </div>
           )}
+          
+          {error && <div className="error-toast">{error}</div>}
         </div>
-        <InputArea inputText={inputText} setInputText={setInputText} onSend={handleSend} />
-        <LanguageSelector selectedLanguage={selectedLanguage} setSelectedLanguage={setSelectedLanguage} />
-        <ActionButtons 
-          onSummarize={handleSummarize} 
-          onTranslate={handleTranslate} 
-          supportedAPIs={supportedAPIs}
-        />
+        
+        <div className="input-section">
+          <div className="input-area">
+            <div className="textarea-wrapper">
+              <textarea
+                value={inputText}
+                onChange={(e) => {
+                  if (e.target.value.length <= maxInputChars) {
+                    setInputText(e.target.value);
+                  }
+                }}
+                placeholder="Type your message here..."
+                maxLength={maxInputChars}
+              />
+              <button 
+                className={`mic-button ${isListening ? 'active' : ''}`}
+                onClick={toggleSpeechToText}
+                title={isListening ? "Stop listening" : "Start speech-to-text"}
+              >
+                {isListening ? '🔴' : '🎤'}
+              </button>
+              <button 
+                className="send-button"
+                onClick={handleSend}
+                disabled={!inputText.trim()}
+                title="Send message"
+              >
+                ➤
+              </button>
+            </div>
+            <div className="char-counter">
+              {inputText.length}/{maxInputChars}
+            </div>
+          </div>
+          
+          <div className="action-bar">
+            <ActionButtons 
+              onSummarize={handleSummarize}
+              onTranslate={handleTranslate}
+              supportedAPIs={supportedAPIs}
+              languageOptions={languageNames}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
