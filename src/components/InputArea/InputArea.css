@@ -7,9 +7,11 @@
   width: 100%;
 }
 
+/* Fix scrolling issue with textarea */
 .input-area textarea {
   width: 100%;
   min-height: 100px;
+  max-height: 200px; /* Limit max height to encourage scrolling */
   padding: 1rem;
   padding-right: 80px; /* Space for buttons */
   border: 1px solid var(--border-light);
@@ -17,6 +19,8 @@
   font-size: 1rem;
   resize: vertical;
   transition: border-color 0.3s;
+  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
 }
 
 .input-area textarea:focus {
@@ -31,12 +35,21 @@
   border-color: var(--border-dark);
 }
 
+/* Reposition input controls to float above content */
 .input-controls {
   position: absolute;
   right: 10px;
   bottom: 10px;
   display: flex;
   gap: 8px;
+  z-index: 5; /* Ensure controls stay above content */
+  background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent background */
+  border-radius: 20px;
+  padding: 4px;
+}
+
+.dark-mode .input-controls {
+  background-color: rgba(51, 51, 51, 0.7);
 }
 
 .mic-button, .send-button {
