@@ -74,7 +74,7 @@ const App = () => {
       
       // If any errors, show them to the user
       if (errors.length > 0) {
-        setError(`API Support Issues: ${errors.join(', ')}. Some features may not work.`);
+        setError(`Browser API Support Issues: ${errors.join(', ')}. Some features may not work.`);
       }
     };
     
