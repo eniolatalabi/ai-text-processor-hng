@@ -1,0 +1,48 @@
+.output-area {
+  margin-bottom: 20px;
+}
+
+.output-area p {
+  margin: 0 0 10px;
+}
+
+.output-area .language {
+  font-size: 14px;
+  color: #666;
+}
+
+.output-area .summary,
+.output-area .translated-text {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-left: 4px solid #007bff;
+  border-radius: 4px;
+}
+
+.translate-section {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.translate-section select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.translate-section button {
+  padding: 10px 20px;
+  background: #ffc107;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.translate-section button:hover {
+  background: #e0a800;
+}

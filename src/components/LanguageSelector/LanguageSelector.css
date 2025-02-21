@@ -1,0 +1,18 @@
+select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.app.dark-mode select {
+  border-color: #555;
+  background: #444;
+  color: #f4f4f9;
+}
