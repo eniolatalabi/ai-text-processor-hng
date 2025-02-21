@@ -16,6 +16,7 @@ const App = () => {
   const [currentUtterance, setCurrentUtterance] = useState(null);
   const [detectedLanguage, setDetectedLanguage] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [isNewChat, setIsNewChat] = useState(true); // New state for tracking if it's a new chat
   const chatWindowRef = useRef(null);
   const maxInputChars = 5000;
 
@@ -94,11 +95,19 @@ const App = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  // Detect language using the native browser language detection API
+  // Handle new chat button click
+  const handleNewChat = () => {
+    setMessages([]);
+    setInputText('');
+    setError('');
+    setIsNewChat(false); // Mark as not a new chat (no welcome message)
+  };
+
+  // Improved language detection
   const detectLanguage = async (text) => {
-    if (!text || text.length < 10) return null;
+    if (!text || text.length < 10) return 'en'; // Default to English for very short text
     
-    // Try using the Translator API for detection
+    // Try using the Translator API for detection first
     if (supportedAPIs.includes('Translator') && window.ai.translator) {
       try {
         const detector = await window.ai.translator.create({
@@ -110,6 +119,7 @@ const App = () => {
         if (detector.detectLanguage) {
           const detected = await detector.detectLanguage(text);
           if (detected && detected.language) {
+            console.log('API detected language:', detected.language);
             return detected.language;
           }
         }
@@ -118,22 +128,49 @@ const App = () => {
       }
     }
 
-    // Basic heuristic detection as fallback
+    // More comprehensive heuristic detection using character frequencies and patterns
     const patterns = {
-      es: /[áéíóúüñ¿¡]/i,
-      fr: /[àâçéèêëîïôùûüÿœ]/i,
-      pt: /[ãõáéíóúâêôç]/i,
-      ru: /[а-яА-Я]/i,
-      tr: /[çğıöşü]/i,
+      // Russian (Cyrillic characters) - More specific
+      ru: /[а-яА-ЯёЁ]{3,}/,
+      
+      // Spanish (Spanish-specific characters and common words) - More specific pattern
+      es: /(?:[áéíóúüñ¿¡]|(?:\b(?:el|la|los|las|un|una|y|o|que|en|por|para|con|su|sus|mi|tu|esto|esta|aquí|allí|hola|gracias|bueno|como)\b.*){4,})/i,
+      
+      // French (French-specific characters and common words) - More specific
+      fr: /(?:[àâçéèêëîïôùûüÿœ]|(?:\b(?:le|la|les|un|une|et|ou|que|qui|dans|sur|pour|avec|je|tu|il|elle|nous|vous|ils|elles|mais|donc|car|si|très|bien|bon|voilà|bonjour|merci)\b.*){4,})/i,
+      
+      // Portuguese (Portuguese-specific characters and common words) - More specific
+      pt: /(?:[ãõáéíóúâêôç]|(?:\b(?:o|a|os|as|um|uma|e|ou|que|em|por|para|com|seu|sua|seus|suas|meu|teu|isto|esta|aqui|lá|olá|obrigado|bom|como)\b.*){4,})/i,
+      
+      // Turkish (Turkish-specific characters and common words) - More specific
+      tr: /(?:[çğıöşü]|(?:\b(?:bir|ve|ile|için|bu|şu|o|ne|nasıl|kim|nerede|merhaba|teşekkürler|iyi|güzel)\b.*){3,})/i,
     };
 
+    // Count matches for each language
+    const scores = {};
     for (const [lang, pattern] of Object.entries(patterns)) {
-      if (pattern.test(text)) {
-        return lang;
-      }
+      const matches = (text.match(pattern) || []).length;
+      scores[lang] = matches;
     }
 
-    // Default to English if no pattern matches
+    // Get language with highest score
+    let detectedLang = 'en'; // Default to English
+    let highestScore = 0;
+    
+    for (const [lang, score] of Object.entries(scores)) {
+      if (score > highestScore) {
+        highestScore = score;
+        detectedLang = lang;
+      }
+    }
+    
+    // If we found matches for a non-English language, return it
+    if (highestScore > 0) {
+      console.log('Heuristic detected language:', detectedLang, 'with score:', highestScore);
+      return detectedLang;
+    }
+    
+    // Default to English if no patterns matched strongly
     return 'en';
   };
 
@@ -237,6 +274,7 @@ const App = () => {
     setIsLoading(false);
   };
 
+  // Improved translation function
   const handleTranslate = async (targetLanguage) => {
     if (!messages.length) {
       setError('No text available to translate.');
@@ -254,138 +292,143 @@ const App = () => {
     setIsLoading(true);
     setError('');
 
-    try {
-      console.log('Using Translator API...');
-      const lastMessage = messages[messages.length - 1].text;
-      let detectedLang = '';
-      
-      // Step 1: Explicitly detect the language first
+    // Special case for English as target language
+    if (targetLanguage === 'en') {
       try {
-        const detector = await window.ai.translator.create({
+        const lastMessage = messages[messages.length - 1].text;
+        const translator = await window.ai.translator.create({
           model: 'default',
-          sourceLanguage: 'auto',
-          targetLanguage: 'en' 
+          sourceLanguage: 'auto', // Always use auto-detect for English target
+          targetLanguage: 'en'
         });
         
-        if (detector.detectLanguage) {
-          const detected = await detector.detectLanguage(lastMessage);
-          if (detected && detected.language) {
-            detectedLang = detected.language;
-            setDetectedLanguage(detectedLang);
-            console.log('Language detected:', detectedLang);
-          }
-        }
-      } catch (detectErr) {
-        console.warn('Detection error:', detectErr);
-        // Try our custom detection as fallback
-        detectedLang = await detectLanguage(lastMessage) || '';
-      }
-      
-      // Step 2: Now translate with explicit source/target
-      const translator = await window.ai.translator.create({
-        model: 'default',
-        sourceLanguage: detectedLang || 'auto', // Use detected language or auto
-        targetLanguage: targetLanguage
-      });
-      
-      console.log(`Translating from ${detectedLang || 'auto'} to ${targetLanguage}`);
-      const result = await translator.translate(lastMessage);
-      console.log('Translation Result:', result);
-
-      // Try to extract detected language from result if not already set
-      if (!detectedLang && result && result.detectedLanguage) {
-        detectedLang = result.detectedLanguage;
-        setDetectedLanguage(detectedLang);
-      }
-
-      if (typeof result === 'string' && result.trim() !== '') {
-        const detectedInfo = detectedLang ? 
-          `${languageNames[detectedLang] || detectedLang} → ` : '';
-          
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { 
-            text: `${detectedInfo}${languageNames[targetLanguage]}: ${result}`, 
-            type: 'system',
-            timestamp: formatTimestamp(),
-            language: targetLanguage
-          },
-        ]);
-        setError(''); // Clear error if translation succeeds
-      } else {
-        setError('Failed to translate text. Empty result received.');
-        console.warn('Translator API did not return a translation.');
-      }
-    } catch (err) {
-      console.error('Translation Error:', err);
-
-      // Fallback approach if the first method fails
-      try {
-        console.log('Attempting fallback translation approach...');
-
-        // Attempt to detect content language through a different approach
-        let sourceLanguage = 'auto';
-        if (targetLanguage === 'en') {
-          // If target is English, try to detect non-English source
-          for (const lang of Object.keys(languageNames)) {
-            if (lang !== 'en' && lang !== 'auto') {
-              try {
-                const testTranslator = await window.ai.translator.create({
-                  model: 'default',
-                  sourceLanguage: lang,
-                  targetLanguage: 'en'
-                });
-                
-                const lastMessage = messages[messages.length - 1].text;
-                const testResult = await testTranslator.translate(lastMessage);
-                
-                if (testResult && testResult.trim() !== lastMessage.trim()) {
-                  sourceLanguage = lang;
-                  setDetectedLanguage(lang);
-                  console.log(`Found likely source language: ${lang}`);
-                  break;
-                }
-              } catch (e) {
-                console.log(`Test for ${lang} failed:`, e);
-              }
-            }
-          }
-        } else {
-          // If target is not English, assume English source
-          sourceLanguage = 'en';
-          setDetectedLanguage('en');
-        }
-
-        console.log(`Fallback translation from ${sourceLanguage} to ${targetLanguage}`);
-        const fallbackOpts = {
-          model: 'default',
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
-        };
-
-        const translator = await window.ai.translator.create(fallbackOpts);
-        const lastMessage = messages[messages.length - 1].text;
         const result = await translator.translate(lastMessage);
         
         if (typeof result === 'string' && result.trim() !== '') {
           setMessages((prevMessages) => [
             ...prevMessages,
             { 
-              text: `${languageNames[sourceLanguage] || sourceLanguage} → ${languageNames[targetLanguage]}: ${result}`, 
+              text: `Auto-detected → English: ${result}`, 
+              type: 'system',
+              timestamp: formatTimestamp(),
+              language: 'en'
+            },
+          ]);
+        }
+      } catch (err) {
+        console.error('Translation to English failed:', err);
+        setError('Translation to English failed. Please try again.');
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    // For non-English target languages
+    try {
+      console.log('Using Translator API...');
+      const lastMessage = messages[messages.length - 1].text;
+      
+      // Get the source language - either from the message if it's already set,
+      // or by detecting it
+      let sourceLanguage = messages[messages.length - 1].language;
+      if (!sourceLanguage || sourceLanguage === 'auto') {
+        try {
+          // Try to detect language explicitly
+          const detector = await window.ai.translator.create({
+            model: 'default',
+            sourceLanguage: 'auto',
+            targetLanguage: 'en'
+          });
+          
+          if (detector.detectLanguage) {
+            const detected = await detector.detectLanguage(lastMessage);
+            if (detected && detected.language) {
+              sourceLanguage = detected.language;
+              setDetectedLanguage(sourceLanguage);
+              console.log('Translation language detected:', sourceLanguage);
+            }
+          }
+        } catch (e) {
+          console.warn('Detection error during translation:', e);
+          // Use our custom detection as fallback
+          sourceLanguage = await detectLanguage(lastMessage);
+        }
+      }
+      
+      // Don't translate if source and target languages are the same
+      if (sourceLanguage === targetLanguage) {
+        setError('Source and target languages are the same. Please select a different language.');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log(`Translating from ${sourceLanguage} to ${targetLanguage}`);
+      
+      // Create the translator with explicit source and target languages
+      const translator = await window.ai.translator.create({
+        model: 'default',
+        sourceLanguage: sourceLanguage || 'auto',
+        targetLanguage: targetLanguage
+      });
+      
+      const result = await translator.translate(lastMessage);
+      
+      if (typeof result === 'string' && result.trim() !== '') {
+        const sourceName = languageNames[sourceLanguage] || sourceLanguage;
+        const targetName = languageNames[targetLanguage] || targetLanguage;
+        
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { 
+            text: `${sourceName} → ${targetName}: ${result}`, 
+            type: 'system',
+            timestamp: formatTimestamp(),
+            language: targetLanguage
+          },
+        ]);
+      } else {
+        throw new Error('Empty translation result');
+      }
+    } catch (err) {
+      console.error('Translation Error:', err);
+      
+      // Try a simplified approach for problematic language pairs
+      try {
+        console.log('Attempting simplified translation...');
+        const lastMessage = messages[messages.length - 1].text;
+        
+        // Force explicit language pair configuration
+        const translator = await window.ai.translator.create({
+          model: 'default',
+          // For Russian/French target, assume English source
+          sourceLanguage: (targetLanguage === 'ru' || targetLanguage === 'fr') ? 'en' : 'auto',
+          targetLanguage: targetLanguage
+        });
+        
+        const result = await translator.translate(lastMessage);
+        
+        if (typeof result === 'string' && result.trim() !== '') {
+          const sourceLabel = (targetLanguage === 'ru' || targetLanguage === 'fr') ? 'English' : 'Auto-detected';
+          const targetName = languageNames[targetLanguage];
+          
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            { 
+              text: `${sourceLabel} → ${targetName}: ${result}`, 
               type: 'system',
               timestamp: formatTimestamp(),
               language: targetLanguage
             },
           ]);
-          setError(''); // Clear error if fallback succeeds
         } else {
-          throw new Error('Empty translation result from fallback');
+          throw new Error('Empty translation result from simplified approach');
         }
       } catch (fallbackErr) {
-        console.error('Fallback translation also failed:', fallbackErr);
-        setError('Translation failed. Please try again with different text or language.');
+        console.error('All translation attempts failed:', fallbackErr);
+        setError('Translation failed. The language pair may not be supported or there might be an API limitation.');
       }
     }
+    
     setIsLoading(false);
   };
 
@@ -492,8 +535,19 @@ const App = () => {
   return (
     <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
       <header className="app-header">
-        <h1 className="app-title">Linguastand</h1>
+        <div className='app-title'>
+        <h1 className="title">Linguastand</h1>
         <DarkModeToggle isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+        </div>
+        <div className="header-actions">
+          <button 
+            className="new-chat-button" 
+            onClick={handleNewChat}
+            title="Start a new chat"
+          >
+            New Chat
+          </button>
+        </div>
       </header>
       
       {/* API Status Banner */}
@@ -505,7 +559,7 @@ const App = () => {
       
       <div className="chat-container">
         <div className="chat-window" ref={chatWindowRef}>
-          {messages.length === 0 && (
+          {messages.length === 0 && isNewChat && (
             <div className="welcome-message">
               <h2>Welcome to Linguastand</h2>
               <p>This app helps you with language-related tasks:</p>

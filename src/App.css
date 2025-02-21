@@ -34,6 +34,7 @@ body {
   background-color: var(--background-light);
   color: var(--text-light);
   transition: background-color 0.3s, color 0.3s;
+
 }
 
 .app {
@@ -41,6 +42,7 @@ body {
   display: flex;
   flex-direction: column;
   transition: background-color 0.3s, color 0.3s;
+
 }
 
 .app.dark-mode {
@@ -48,15 +50,15 @@ body {
   color: var(--text-dark);
 }
 
-.app-header {
+/* .app-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: space-evenly;
   align-items: center;
-  padding: 1rem 2rem;
+  padding: 1rem 1rem;
   border-bottom: 1px solid var(--border-light);
   background-color: white;
   box-shadow: 0 2px 4px var(--shadow-light);
-}
+} */
 
 .dark-mode .app-header {
   background-color: #1a1a1a;
@@ -64,10 +66,17 @@ body {
   box-shadow: 0 2px 4px var(--shadow-dark);
 }
 
-.app-title {
+.title {
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--primary-color);
+}
+
+.app-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
 }
 
 .chat-container {
@@ -487,5 +496,79 @@ body {
     width: 95%;
     margin: 1rem auto;
     gap: 1rem;
+  }
+}
+
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.new-chat-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.new-chat-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.dark-mode .new-chat-button {
+  background-color: var(--primary-color);
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border-light);
+  background-color: white;
+  box-shadow: 0 2px 4px var(--shadow-light);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* Responsive header adjustments */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.75rem 1rem;
+    flex-wrap: nowrap;
+  }
+  
+  .app-title {
+    font-size: 1.3rem;
+  }
+  
+  .header-actions {
+    margin-left: auto;
+  }
+  
+  .new-chat-button {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* For very small screens */
+@media (max-width: 480px) {
+  .app-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
