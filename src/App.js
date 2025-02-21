@@ -508,7 +508,7 @@ const App = () => {
         <div className="chat-window" ref={chatWindowRef}>
           {messages.length === 0 && (
             <div className="welcome-message">
-              <h2>Welcome to Ox Language Linguastand</h2>
+              <h2>Welcome to Linguastand</h2>
               <p>This app helps you with language-related tasks:</p>
               <ul>
                 <li>Translate text between multiple languages</li>
