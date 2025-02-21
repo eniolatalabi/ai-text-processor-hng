@@ -1,70 +1,137 @@
-# Getting Started with Create React App
+# Linguastand
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A powerful language processing application built with React that leverages Chrome's AI APIs for translation, summarization, and speech capabilities.
 
-## Available Scripts
+## Live Demo
 
-In the project directory, you can run:
+[https://ai-text-processor-hng-orpin.vercel.app/](https://ai-text-processor-hng-orpin.vercel.app/)
 
-### `npm start`
+## Features
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Multi-language Translation**
+  - Supports English, French, Portuguese, Russian, Spanish, and Turkish
+  - Automatic language detection
+  - Real-time translation processing
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- **Text Processing**
+  - Smart text summarization
+  - Key points extraction
+  - 5000 character support per message
 
-### `npm test`
+- **Audio Capabilities**
+  - Text-to-speech conversion
+  - Speech-to-text input
+  - Language-specific pronunciation
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **User Experience**
+  - Dark/Light theme toggle
+  - Real-time character counting
+  - Responsive chat interface
+  - Message timestamping
 
-### `npm run build`
+## Prerequisites
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Before you begin, ensure you have the following installed:
+- Node.js (version 14.0.0 or higher)
+- npm or yarn package manager
+- Chrome browser with AI features enabled
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Installation
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. Clone the repository
+```bash
+git clone https://github.com/eniolatalabi/ai-text-processor-hng.git
+```
 
-### `npm run eject`
+2. Navigate to the project directory
+```bash
+cd ai-text-processor-hng
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+3. Install dependencies
+```bash
+npm install
+# or
+yarn install
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+4. Start the development server
+```bash
+npm run dev
+# or
+yarn dev
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+5. Open http://localhost:3000 in your Chrome browser
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Project Structure
 
-## Learn More
+```
+ai-text-processor-hng/
+├── src/
+│   ├── components/
+│   │   ├── ActionButtons/
+│   │   │   ├── ActionButtons.jsx
+│   │   │   └── ActionButtons.css
+│   │   ├── DarkModeToggle/
+│   │   │   ├── DarkModeToggle.jsx
+│   │   │   └── DarkModeToggle.css
+│   │   └── InputArea/
+│   │       ├── InputArea.jsx
+│   │       └── InputArea.css
+│   ├── App.jsx
+│   ├── App.css
+│   └── main.jsx
+├── public/
+├── index.html
+├── package.json
+└── README.md
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Component Structure
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- **App.jsx**: Main application component
+  - Manages state for messages, language detection, and UI controls
+  - Handles API integrations and error management
+  - Implements speech recognition and synthesis
 
-### Code Splitting
+- **Components**:
+  - **ActionButtons**: Handles translation and summarization actions
+  - **DarkModeToggle**: Manages theme switching
+  - **InputArea**: Text input and character counting functionality
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Key Dependencies
 
-### Analyzing the Bundle Size
+- React
+- Chrome AI APIs
+- Web Speech API
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Important Notes
 
-### Making a Progressive Web App
+- This application requires Chrome's AI features to be enabled
+- Speech recognition functionality is browser-dependent
+- Maximum input length is 5000 characters per message
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Contributing
 
-### Advanced Configuration
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## License
 
-### Deployment
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Author
 
-### `npm run build` fails to minify
+- Eniola Talabi - [GitHub Profile](https://github.com/eniolatalabi)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Acknowledgments
+
+- Chrome AI API Team
+- Vercel for hosting
+
+---
+If you found this project helpful, please give it a star!
