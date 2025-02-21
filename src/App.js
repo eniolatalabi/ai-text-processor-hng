@@ -28,28 +28,57 @@ const App = () => {
     'auto': 'Auto-detected'
   };
 
-  // Check API support on component mount
+  // Check API support on component mount with verification
   useEffect(() => {
-    const supported = [];
-    if (window.ai) {
-      if (window.ai.summarizer) {
-        console.log('Summarizer API found:', window.ai.summarizer);
-        supported.push('Summarizer');
+    const checkAPISupport = async () => {
+      const supported = [];
+      const errors = [];
+      
+      if (window.ai) {
+        try {
+          if (window.ai.summarizer) {
+            // Test if we can actually create a summarizer instance
+            await window.ai.summarizer.create({model: 'default'});
+            console.log('Summarizer API verified');
+            supported.push('Summarizer');
+          } else {
+            errors.push('Summarizer API not available');
+          }
+        } catch (e) {
+          console.error('Summarizer API failed verification:', e);
+          errors.push('Summarizer API failed to initialize');
+        }
+        
+        try {
+          if (window.ai.translator) {
+            // Test if we can create a translator instance
+            await window.ai.translator.create({
+              model: 'default',
+              sourceLanguage: 'en',
+              targetLanguage: 'es'
+            });
+            console.log('Translator API verified');
+            supported.push('Translator');
+          } else {
+            errors.push('Translator API not available');
+          }
+        } catch (e) {
+          console.error('Translator API failed verification:', e);
+          errors.push('Translator API failed to initialize');
+        }
       } else {
-        console.warn('Summarizer API NOT found.');
+        errors.push('Chrome AI APIs not enabled');
       }
-
-      if (window.ai.translator) {
-        console.log('Translator API found:', window.ai.translator);
-        supported.push('Translator');
-      } else {
-        console.warn('Translator API NOT found.');
+      
+      setSupportedAPIs(supported);
+      
+      // If any errors, show them to the user
+      if (errors.length > 0) {
+        setError(`API Support Issues: ${errors.join(', ')}. Some features may not work.`);
       }
-    } else {
-      console.error('window.ai not found. Ensure Chrome AI APIs are enabled.');
-    }
-
-    setSupportedAPIs(supported);
+    };
+    
+    checkAPISupport();
   }, []);
 
   const toggleDarkMode = () => {
@@ -67,8 +96,8 @@ const App = () => {
     setMessages([...messages, newMessage]);
     setInputText('');
     
-    // Reset detected language when new message is sent
-    setDetectedLanguage('');
+    // Don't reset detected language here
+    // Language detection happens during translation
   };
 
   const handleSummarize = async () => {
@@ -76,40 +105,42 @@ const App = () => {
       setError('No text available to summarize.');
       return;
     }
+    
+    if (!supportedAPIs.includes('Summarizer')) {
+      setError('Summarizer API not available. Please enable Chrome AI features.');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
     try {
-      if (supportedAPIs.includes('Summarizer')) {
-        console.log('Attempting to use Summarizer API...');
+      console.log('Using Summarizer API...');
 
-        const summarizer = await window.ai.summarizer.create({
-          model: 'default',
-          type: 'key-points',
-          format: 'markdown',
-          length: 'short',
-        });
+      const summarizer = await window.ai.summarizer.create({
+        model: 'default',
+        type: 'key-points',
+        format: 'markdown',
+        length: 'short',
+      });
 
-        console.log('Summarizer API created:', summarizer);
+      console.log('Summarizer API created:', summarizer);
 
-        const lastMessage = messages[messages.length - 1].text;
-        const result = await summarizer.summarize(lastMessage);
-        console.log('Summarization Result:', result);
+      const lastMessage = messages[messages.length - 1].text;
+      const result = await summarizer.summarize(lastMessage);
+      console.log('Summarization Result:', result);
 
-        if (result && typeof result === 'string') {
-          setMessages((prevMessages) => [
-            ...prevMessages,
-            { text: `Summary:\n${result}`, type: 'system' },
-          ]);
-        } else {
-          setError('Failed to summarize text.');
-          console.warn('Summarizer API did not return a valid summary.');
-        }
+      if (result && typeof result === 'string') {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { text: `Summary:\n${result}`, type: 'system' },
+        ]);
       } else {
-        setError('Summarizer API not supported.');
+        setError('Failed to summarize text.');
+        console.warn('Summarizer API did not return a valid summary.');
       }
     } catch (err) {
-      setError('Failed to summarize text.');
+      setError('Failed to summarize text: ' + (err.message || 'Unknown error'));
       console.error('Summarization Error:', err);
     }
     setIsLoading(false);
@@ -120,111 +151,139 @@ const App = () => {
       setError('No text available to translate.');
       return;
     }
+    
+    if (!supportedAPIs.includes('Translator')) {
+      setError('Translator API not available. Please enable Chrome AI features.');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
     try {
-      if (supportedAPIs.includes('Translator')) {
-        console.log('Attempting to use Translator API...');
-
-        // Define translation options with required sourceLanguage
-        const translateOpts = {
+      console.log('Using Translator API...');
+      const lastMessage = messages[messages.length - 1].text;
+      let detectedLang = '';
+      
+      // Step 1: Explicitly detect the language first
+      try {
+        const detector = await window.ai.translator.create({
           model: 'default',
-          sourceLanguage: 'auto', // Automatically detect the source language
-          targetLanguage: selectedLanguage, // Target language from the selector
-        };
-
-        console.log('Translator options:', translateOpts);
-
-        // Create the translator instance
-        const translator = await window.ai.translator.create(translateOpts);
-        console.log('Translator API created:', translator);
-
-        // Translate the last message
-        const lastMessage = messages[messages.length - 1].text;
+          sourceLanguage: 'auto',
+          targetLanguage: 'en' // Doesn't matter for detection
+        });
         
-        // Attempt to detect language first
-        try {
-          // If the API supports language detection
-          if (translator.detectLanguage) {
-            const detected = await translator.detectLanguage(lastMessage);
-            if (detected && detected.language) {
-              setDetectedLanguage(detected.language);
-              console.log('Detected language:', detected.language);
-            }
+        if (detector.detectLanguage) {
+          const detected = await detector.detectLanguage(lastMessage);
+          if (detected && detected.language) {
+            detectedLang = detected.language;
+            setDetectedLanguage(detectedLang);
+            console.log('Language detected:', detectedLang);
           }
-        } catch (detectErr) {
-          console.warn('Language detection unavailable:', detectErr);
-          // Continue with translation even if detection fails
         }
-        
-        const result = await translator.translate(lastMessage);
-        console.log('Translation Result:', result);
+      } catch (detectErr) {
+        console.warn('Detection error:', detectErr);
+      }
+      
+      // Step 2: Now translate with explicit source/target
+      const translator = await window.ai.translator.create({
+        model: 'default',
+        sourceLanguage: detectedLang || 'auto', // Use detected language or auto
+        targetLanguage: selectedLanguage
+      });
+      
+      console.log(`Translating from ${detectedLang || 'auto'} to ${selectedLanguage}`);
+      const result = await translator.translate(lastMessage);
+      console.log('Translation Result:', result);
 
-        // Try to extract detected language from result if not already set
-        if (!detectedLanguage && result && result.detectedLanguage) {
-          setDetectedLanguage(result.detectedLanguage);
-        }
+      // Try to extract detected language from result if not already set
+      if (!detectedLang && result && result.detectedLanguage) {
+        detectedLang = result.detectedLanguage;
+        setDetectedLanguage(detectedLang);
+      }
 
-        if (typeof result === 'string' && result.trim() !== '') {
-          const detectedInfo = detectedLanguage ? 
-            `Detected: ${languageNames[detectedLanguage] || detectedLanguage} → ` : '';
-            
-          setMessages((prevMessages) => [
-            ...prevMessages,
-            { 
-              text: `${detectedInfo}Translated to ${languageNames[selectedLanguage]}: ${result}`, 
-              type: 'system' 
-            },
-          ]);
-          setError(''); // Clear error if translation succeeds
-        } else {
-          setError('Failed to translate text.');
-          console.warn('Translator API did not return a translation.');
-        }
+      if (typeof result === 'string' && result.trim() !== '') {
+        const detectedInfo = detectedLang ? 
+          `Detected: ${languageNames[detectedLang] || detectedLang} → ` : '';
+          
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { 
+            text: `${detectedInfo}Translated to ${languageNames[selectedLanguage]}: ${result}`, 
+            type: 'system' 
+          },
+        ]);
+        setError(''); // Clear error if translation succeeds
       } else {
-        setError('Translator API not supported.');
+        setError('Failed to translate text. Empty result received.');
+        console.warn('Translator API did not return a translation.');
       }
     } catch (err) {
       console.error('Translation Error:', err);
 
       // Fallback approach if the first method fails
       try {
-        if (supportedAPIs.includes('Translator')) {
-          console.log('Attempting fallback translation approach...');
+        console.log('Attempting fallback translation approach...');
 
-          // Fallback: Use a fixed source language (e.g., 'en')
-          const fallbackOpts = {
-            model: 'default',
-            sourceLanguage: 'en', // Fixed source language
-            targetLanguage: selectedLanguage,
-          };
-
-          const translator = await window.ai.translator.create(fallbackOpts);
-          console.log('Fallback translator created:', translator);
-
-          const lastMessage = messages[messages.length - 1].text;
-          const result = await translator.translate(lastMessage);
-          console.log('Fallback translation result:', result);
-
-          if (typeof result === 'string' && result.trim() !== '') {
-            setMessages((prevMessages) => [
-              ...prevMessages,
-              { 
-                text: `Assuming English source → Translated to ${languageNames[selectedLanguage]}: ${result}`, 
-                type: 'system' 
-              },
-            ]);
-            // Set detected language to English for fallback
-            setDetectedLanguage('en');
-            setError(''); // Clear error if fallback succeeds
-          } else {
-            throw new Error('Empty translation result');
+        // Attempt to detect content language through a different approach
+        let sourceLanguage = 'auto';
+        if (selectedLanguage === 'en') {
+          // If target is English, try to detect non-English source
+          for (const lang of Object.keys(languageNames)) {
+            if (lang !== 'en' && lang !== 'auto') {
+              try {
+                const testTranslator = await window.ai.translator.create({
+                  model: 'default',
+                  sourceLanguage: lang,
+                  targetLanguage: 'en'
+                });
+                
+                const lastMessage = messages[messages.length - 1].text;
+                const testResult = await testTranslator.translate(lastMessage);
+                
+                if (testResult && testResult.trim() !== lastMessage.trim()) {
+                  sourceLanguage = lang;
+                  setDetectedLanguage(lang);
+                  console.log(`Found likely source language: ${lang}`);
+                  break;
+                }
+              } catch (e) {
+                console.log(`Test for ${lang} failed:`, e);
+              }
+            }
           }
+        } else {
+          // If target is not English, assume English source
+          sourceLanguage = 'en';
+          setDetectedLanguage('en');
+        }
+
+        console.log(`Fallback translation from ${sourceLanguage} to ${selectedLanguage}`);
+        const fallbackOpts = {
+          model: 'default',
+          sourceLanguage: sourceLanguage,
+          targetLanguage: selectedLanguage,
+        };
+
+        const translator = await window.ai.translator.create(fallbackOpts);
+        const lastMessage = messages[messages.length - 1].text;
+        const result = await translator.translate(lastMessage);
+        
+        if (typeof result === 'string' && result.trim() !== '') {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            { 
+              text: `${languageNames[sourceLanguage] || sourceLanguage} → Translated to ${languageNames[selectedLanguage]}: ${result}`, 
+              type: 'system' 
+            },
+          ]);
+          setError(''); // Clear error if fallback succeeds
+        } else {
+          throw new Error('Empty translation result from fallback');
         }
       } catch (fallbackErr) {
         console.error('Fallback translation also failed:', fallbackErr);
-        setError('Translation failed. Please try again.');
+        setError('Translation failed. Please try again with different text or language.');
       }
     }
     setIsLoading(false);
@@ -236,6 +295,12 @@ const App = () => {
     
     const synth = window.speechSynthesis;
     const utterance = new SpeechSynthesisUtterance(text);
+
+    // Set language for speech if detected
+    if (detectedLanguage && detectedLanguage !== 'auto') {
+      utterance.lang = detectedLanguage;
+      console.log(`Setting speech language to: ${detectedLanguage}`);
+    }
 
     utterance.onstart = () => {
       setIsSpeaking(true);
@@ -260,6 +325,14 @@ const App = () => {
   return (
     <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
       <DarkModeToggle isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+      
+      {/* API Status Banner */}
+      {supportedAPIs.length === 0 && (
+        <div className="api-status-warning">
+          <p>⚠️ Chrome AI APIs not detected. Please enable AI features in Chrome settings.</p>
+        </div>
+      )}
+      
       <div className="chat-container">
         <div className="chat-window">
           {messages.map((msg, index) => (
@@ -269,6 +342,7 @@ const App = () => {
                 <button
                   onClick={() => handleTextToSpeech(msg.text)}
                   aria-label="Play"
+                  disabled={!('speechSynthesis' in window)}
                 >
                   🔊
                 </button>
@@ -290,7 +364,11 @@ const App = () => {
         </div>
         <InputArea inputText={inputText} setInputText={setInputText} onSend={handleSend} />
         <LanguageSelector selectedLanguage={selectedLanguage} setSelectedLanguage={setSelectedLanguage} />
-        <ActionButtons onSummarize={handleSummarize} onTranslate={handleTranslate} />
+        <ActionButtons 
+          onSummarize={handleSummarize} 
+          onTranslate={handleTranslate} 
+          supportedAPIs={supportedAPIs}
+        />
       </div>
     </div>
   );
