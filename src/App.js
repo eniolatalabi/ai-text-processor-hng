@@ -493,7 +493,7 @@ const App = () => {
   return (
     <div className={`app ${isDarkMode ? 'dark-mode' : ''}`}>
       <header className="app-header">
-        <h1 className="app-title">Smart Language Assistant</h1>
+        <h1 className="app-title">Ox Language Assistant</h1>
         <DarkModeToggle isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       </header>
       
@@ -508,7 +508,7 @@ const App = () => {
         <div className="chat-window" ref={chatWindowRef}>
           {messages.length === 0 && (
             <div className="welcome-message">
-              <h2>Welcome to Smart Language Assistant</h2>
+              <h2>Welcome to Ox Language Assistant</h2>
               <p>This app helps you with language-related tasks:</p>
               <ul>
                 <li>Translate text between multiple languages</li>
