@@ -188,33 +188,6 @@ body {
   background-color: rgba(255, 255, 255, 0.02);
 }
 
-.action-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: transparent;
-  border: none;
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--text-secondary-light);
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.dark-mode .action-button {
-  color: var(--text-secondary-dark);
-}
-
-.action-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: var(--text-light);
-}
-
-.dark-mode .action-button:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-dark);
-}
 
 .input-section {
   display: flex;
