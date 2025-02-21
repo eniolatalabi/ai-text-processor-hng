@@ -119,7 +119,6 @@ const App = () => {
     }
 
     // Basic heuristic detection as fallback
-    // This is very simplistic and just for demonstration
     const patterns = {
       es: /[áéíóúüñ¿¡]/i,
       fr: /[àâçéèêëîïôùûüÿœ]/i,
@@ -265,7 +264,7 @@ const App = () => {
         const detector = await window.ai.translator.create({
           model: 'default',
           sourceLanguage: 'auto',
-          targetLanguage: 'en' // Doesn't matter for detection
+          targetLanguage: 'en' 
         });
         
         if (detector.detectLanguage) {
