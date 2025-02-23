@@ -220,9 +220,11 @@ const App = () => {
       return;
     }
     
-    const lastMessage = messages[messages.length - 1].text;
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageText = lastMessage.text;
+    const sourceLanguage = lastMessage.language || 'en';
     
-    if (lastMessage.length < 150) {
+    if (lastMessageText.length < 150) {
       setError('Input must be at least 150 characters for summarization.');
       return;
     }
@@ -236,8 +238,29 @@ const App = () => {
     setError('');
 
     try {
-      console.log('Using Summarizer API...');
+      let textToSummarize = lastMessageText;
+      let finalLanguage = sourceLanguage;
 
+      // If text is not in English, translate it first, summarize, then translate back
+      if (sourceLanguage !== 'en') {
+        try {
+          // Translate to English first
+          const translatorToEn = await window.ai.translator.create({
+            model: 'default',
+            sourceLanguage: sourceLanguage,
+            targetLanguage: 'en'
+          });
+          
+          textToSummarize = await translatorToEn.translate(lastMessageText);
+        } catch (err) {
+          console.error('Translation to English for summarization failed:', err);
+          setError('Failed to process text in the original language.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Summarize the text
       const summarizer = await window.ai.summarizer.create({
         model: 'default',
         type: 'key-points',
@@ -245,25 +268,40 @@ const App = () => {
         length: 'short',
       });
 
-      console.log('Summarizer API created:', summarizer);
+      let summary = await summarizer.summarize(textToSummarize);
+      
+      // If original text wasn't in English, translate summary back
+      if (sourceLanguage !== 'en') {
+        try {
+          const translatorBack = await window.ai.translator.create({
+            model: 'default',
+            sourceLanguage: 'en',
+            targetLanguage: sourceLanguage
+          });
+          
+          summary = await translatorBack.translate(summary);
+        } catch (err) {
+          console.error('Translation back to original language failed:', err);
+          setError('Failed to translate summary back to original language.');
+          setIsLoading(false);
+          return;
+        }
+      }
 
-      const result = await summarizer.summarize(lastMessage);
-      console.log('Summarization Result:', result);
-
-      if (result && typeof result === 'string') {
-        const formattedSummary = formatSummary(result);
+      if (summary && typeof summary === 'string') {
+        const formattedSummary = formatSummary(summary);
         
         setMessages((prevMessages) => [
           ...prevMessages,
           { 
             text: `Summary:\n${formattedSummary}`, 
             type: 'system',
-            timestamp: formatTimestamp() 
+            timestamp: formatTimestamp(),
+            language: sourceLanguage
           },
         ]);
       } else {
         setError('Failed to summarize text.');
-        console.warn('Summarizer API did not return a valid summary.');
       }
     } catch (err) {
       setError('Failed to summarize text: ' + (err.message || 'Unknown error'));
@@ -272,7 +310,6 @@ const App = () => {
     setIsLoading(false);
   };
 
-  // Improved translation function
   const handleTranslate = async (targetLanguage) => {
     if (!messages.length) {
       setError('No text available to translate.');
@@ -430,7 +467,7 @@ const App = () => {
     setIsLoading(false);
   };
 
-  const handleTextToSpeech = (text, language) => {
+  const handleTextToSpeech = (text, language, messageId) => {
     // First cancel any ongoing speech
     window.speechSynthesis.cancel();
     
@@ -440,15 +477,16 @@ const App = () => {
     // Set language for speech if available
     if (language && language !== 'auto') {
       utterance.lang = language;
-      console.log(`Setting speech language to: ${language}`);
     } else if (detectedLanguage && detectedLanguage !== 'auto') {
       utterance.lang = detectedLanguage;
-      console.log(`Setting speech language to: ${detectedLanguage}`);
     }
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      setCurrentUtterance(utterance);
+      setCurrentUtterance({
+        utterance,
+        messageId
+      });
     };
 
     utterance.onend = () => {
@@ -587,18 +625,21 @@ const App = () => {
               <div className="message-content">{message.text}</div>
               <div className="message-actions">
                 {message.text && (
-                  <button
-                    className="action-button"
-                    onClick={() => handleTextToSpeech(message.text, message.language)}
-                    disabled={isSpeaking}
-                  >
-                    <span>🔊 Listen</span>
-                  </button>
-                )}
-                {isSpeaking && currentUtterance && (
-                  <button className="action-button" onClick={handleStop}>
-                    <span>⏹️ Stop</span>
-                  </button>
+                  <>
+                    {(!isSpeaking || (currentUtterance && currentUtterance.messageId !== index)) && (
+                      <button
+                        className="action-button"
+                        onClick={() => handleTextToSpeech(message.text, message.language, index)}
+                      >
+                        <span>🔊 Listen</span>
+                      </button>
+                    )}
+                    {isSpeaking && currentUtterance && currentUtterance.messageId === index && (
+                      <button className="action-button" onClick={handleStop}>
+                        <span>⏹️ Stop</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
