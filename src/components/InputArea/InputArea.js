@@ -90,7 +90,7 @@ const InputArea = ({ inputText, setInputText, onSend, maxChars }) => {
             onClick={isRecording ? stopSpeechRecognition : startSpeechRecognition}
             title={isRecording ? "Stop recording" : "Start voice input"}
           >
-            {isRecording ? '⏹️' : '🎤'}
+            {isRecording ? '⏹️' : '🎙️'}
           </button>
 
           <button 
