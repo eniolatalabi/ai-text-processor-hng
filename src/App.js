@@ -634,7 +634,7 @@ const App = () => {
                 onClick={toggleSpeechToText}
                 title={isListening ? "Stop listening" : "Start speech-to-text"}
               >
-                {isListening ? '🔴' : '🎤'}
+                {isListening ? '🔴' : '🎙️'}
               </button>
               <button 
                 className="send-button"
