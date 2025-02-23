@@ -20,7 +20,6 @@ const App = () => {
   const chatWindowRef = useRef(null);
   const maxInputChars = 5000;
 
-  // Reduced language mapping - only the required languages
   const languageNames = {
     'en': 'English',
     'es': 'Spanish',
@@ -29,6 +28,39 @@ const App = () => {
     'ru': 'Russian',
     'tr': 'Turkish',
     'auto': 'Auto-detect'
+  };
+
+  const languagePatterns = {
+    ru: {
+      name: 'Russian',
+      pattern: /[\u0400-\u04FF]{2,}/,
+      common: /\b(и|в|не|что|это|да|нет|привет|спасибо)\b/gi
+    },
+    es: {
+      name: 'Spanish',
+      pattern: /[áéíóúüñ¿¡]/,
+      common: /\b(el|la|los|las|que|en|y|es|son|está|hola|gracias)\b/gi
+    },
+    fr: {
+      name: 'French',
+      pattern: /[àâçéèêëîïôûùüÿœ]/,
+      common: /\b(le|la|les|de|en|et|est|sont|je|tu|nous|vous|bonjour|merci)\b/gi
+    },
+    pt: {
+      name: 'Portuguese',
+      pattern: /[ãõáéíóúâêôç]/,
+      common: /\b(o|a|os|as|de|em|que|é|são|eu|você|olá|obrigado)\b/gi
+    },
+    tr: {
+      name: 'Turkish',
+      pattern: /[çğıöşü]/,
+      common: /\b(ve|bu|bir|için|ben|sen|merhaba|teşekkürler)\b/gi
+    },
+    en: {
+      name: 'English',
+      pattern: /^[a-zA-Z\s.,!?'"()-]+$/,
+      common: /\b(the|a|an|in|on|at|and|or|but|hello|thanks)\b/gi
+    }
   };
 
   // Auto-scroll to bottom when messages update
@@ -105,9 +137,9 @@ const App = () => {
 
   // Improved language detection
   const detectLanguage = async (text) => {
-    if (!text || text.length < 10) return 'en'; // Default to English for very short text
-    
-    // Try using the Translator API for detection first
+    if (!text || text.length < 5) return 'en';
+
+    // Try API detection first
     if (supportedAPIs.includes('Translator') && window.ai.translator) {
       try {
         const detector = await window.ai.translator.create({
@@ -116,62 +148,28 @@ const App = () => {
           targetLanguage: 'en'
         });
         
-        if (detector.detectLanguage) {
-          const detected = await detector.detectLanguage(text);
-          if (detected && detected.language) {
-            console.log('API detected language:', detected.language);
-            return detected.language;
-          }
+        const detected = await detector.detectLanguage(text);
+        if (detected?.language && languagePatterns[detected.language]) {
+          return detected.language;
         }
       } catch (e) {
-        console.warn('Language detection API error:', e);
+        console.warn('API language detection failed:', e);
       }
     }
 
-    // More comprehensive heuristic detection using character frequencies and patterns
-    const patterns = {
-      // Russian (Cyrillic characters) - More specific
-      ru: /[а-яА-ЯёЁ]{3,}/,
-      
-      // Spanish (Spanish-specific characters and common words) - More specific pattern
-      es: /(?:[áéíóúüñ¿¡]|(?:\b(?:el|la|los|las|un|una|y|o|que|en|por|para|con|su|sus|mi|tu|esto|esta|aquí|allí|hola|gracias|bueno|como)\b.*){4,})/i,
-      
-      // French (French-specific characters and common words) - More specific
-      fr: /(?:[àâçéèêëîïôùûüÿœ]|(?:\b(?:le|la|les|un|une|et|ou|que|qui|dans|sur|pour|avec|je|tu|il|elle|nous|vous|ils|elles|mais|donc|car|si|très|bien|bon|voilà|bonjour|merci)\b.*){4,})/i,
-      
-      // Portuguese (Portuguese-specific characters and common words) - More specific
-      pt: /(?:[ãõáéíóúâêôç]|(?:\b(?:o|a|os|as|um|uma|e|ou|que|em|por|para|com|seu|sua|seus|suas|meu|teu|isto|esta|aqui|lá|olá|obrigado|bom|como)\b.*){4,})/i,
-      
-      // Turkish (Turkish-specific characters and common words) - More specific
-      tr: /(?:[çğıöşü]|(?:\b(?:bir|ve|ile|için|bu|şu|o|ne|nasıl|kim|nerede|merhaba|teşekkürler|iyi|güzel)\b.*){3,})/i,
-    };
-
-    // Count matches for each language
-    const scores = {};
-    for (const [lang, pattern] of Object.entries(patterns)) {
-      const matches = (text.match(pattern) || []).length;
-      scores[lang] = matches;
-    }
+    // Fallback to pattern matching
+    const scores = Object.entries(languagePatterns).reduce((acc, [lang, patterns]) => {
+      const patternScore = (text.match(patterns.pattern) || []).length;
+      const commonScore = (text.match(patterns.common) || []).length;
+      acc[lang] = patternScore * 2 + commonScore;
+      return acc;
+    }, {});
 
     // Get language with highest score
-    let detectedLang = 'en'; // Default to English
-    let highestScore = 0;
-    
-    for (const [lang, score] of Object.entries(scores)) {
-      if (score > highestScore) {
-        highestScore = score;
-        detectedLang = lang;
-      }
-    }
-    
-    // If we found matches for a non-English language, return it
-    if (highestScore > 0) {
-      console.log('Heuristic detected language:', detectedLang, 'with score:', highestScore);
-      return detectedLang;
-    }
-    
-    // Default to English if no patterns matched strongly
-    return 'en';
+    const [detectedLang] = Object.entries(scores)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    return detectedLang;
   };
 
   const formatTimestamp = () => {
